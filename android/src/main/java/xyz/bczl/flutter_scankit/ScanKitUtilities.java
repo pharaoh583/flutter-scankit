@@ -34,7 +34,12 @@ public class ScanKitUtilities {
                 types.add(SCAN_TYPES[i]);
             }
         }
-        return types.stream().mapToInt(Integer::intValue).toArray();
+        
+        int[] typesToInt = new int[types.size()];
+        for (int i = 0; i < typesToInt.length; i++) {
+            typesToInt[i] = types.get(i).intValue();
+        }
+        return typesToInt;
     }
 
     public static int getTypeFromFlags(int flags){
