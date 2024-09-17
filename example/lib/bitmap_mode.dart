@@ -5,7 +5,6 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_scankit/flutter_scankit.dart';
 
-
 class BitmapMode extends StatefulWidget {
   const BitmapMode({Key? key}) : super(key: key);
 
@@ -17,14 +16,15 @@ class _BitmapModeState extends State<BitmapMode> {
   CameraController? controller;
   StreamSubscription? subscription;
   String code = '';
-  ScanKitDecoder decoder = ScanKitDecoder(photoMode: false, parseResult: false);
+  ScanKitDecoder decoder = ScanKitDecoder(
+      scanTypes: ScanTypes.qRCode.bit, photoMode: false, parseResult: false);
 
   @override
   void initState() {
     availableCameras().then((val) {
       List<CameraDescription> _cameras = val;
       if (_cameras.isNotEmpty) {
-        controller = CameraController(_cameras[0], ResolutionPreset.max);
+        controller = CameraController(_cameras[0], ResolutionPreset.medium);
         controller!.initialize().then((_) {
           if (!mounted) {
             return;
@@ -35,8 +35,9 @@ class _BitmapModeState extends State<BitmapMode> {
       }
     });
 
-    subscription = decoder.onResult.listen((event) async{
+    subscription = decoder.onResult.listen((event) async {
       if (event is ResultEvent && event.value.isNotEmpty) {
+        print("dbg: ${event.value.originalValue}");
         subscription!.pause();
         await stopScan();
         if (mounted) {
@@ -52,10 +53,11 @@ class _BitmapModeState extends State<BitmapMode> {
   }
 
   Future<void> stopScan() async {
-    if (controller != null && controller!.value.isStreamingImages) {
+    if (controller != null) {
       // Pause the camera preview
       await controller!.pausePreview();
       await controller!.stopImageStream();
+      // await controller!.dispose();
     }
   }
 
@@ -91,9 +93,11 @@ class _BitmapModeState extends State<BitmapMode> {
   }
 
   void onLatestImageAvailable(CameraImage image) async {
-    if(image.planes.length == 1 && image.format.group == ImageFormatGroup.bgra8888){
+    controller!.pausePreview();
+    if (image.planes.length == 1 &&
+        image.format.group == ImageFormatGroup.bgra8888) {
       await decoder.decode(image.planes[0].bytes, image.width, image.height);
-    }else if(image.planes.length == 3){
+    } else if (image.planes.length == 3) {
       Uint8List y = image.planes[0].bytes;
       Uint8List u = image.planes[1].bytes;
       Uint8List v = image.planes[2].bytes;
@@ -104,5 +108,6 @@ class _BitmapModeState extends State<BitmapMode> {
       combined.setRange(y.length + u.length, y.length + u.length + v.length, v);
       await decoder.decodeYUV(combined, image.width, image.height);
     }
+    controller!.resumePreview();
   }
 }

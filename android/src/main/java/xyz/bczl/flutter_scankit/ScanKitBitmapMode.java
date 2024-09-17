@@ -2,21 +2,26 @@ package xyz.bczl.flutter_scankit;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
+import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.text.TextUtils;
 import android.util.Log;
+import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
 import com.huawei.hms.hmsscankit.ScanUtil;
 import com.huawei.hms.hmsscankit.WriterException;
 import com.huawei.hms.ml.scan.HmsBuildBitmapOption;
 import com.huawei.hms.ml.scan.HmsScan;
+import com.huawei.hms.ml.scan.HmsScanAnalyzer;
 import com.huawei.hms.ml.scan.HmsScanAnalyzerOptions;
 import com.huawei.hms.ml.scan.HmsScanFrame;
 import com.huawei.hms.ml.scan.HmsScanFrameOptions;
+import com.huawei.hms.mlsdk.common.MLFrame;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
@@ -27,30 +32,36 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ScanKitBitmapMode {
+
+//    private static
     public static Map<String, Object> decode(Activity activity, @NonNull byte[] yuv,
                                              @NonNull Long width, @NonNull Long height,
                                              Map<String, Object> options) {
-        YuvImage img = new YuvImage(yuv, ImageFormat.NV21, width.intValue(), height.intValue(), null);
-        HmsScanFrame frame = new HmsScanFrame(img);
-        HmsScanFrameOptions.Creator creator = new HmsScanFrameOptions.Creator();
+        Bitmap bitmap = convertToBitmap(width.intValue(), height.intValue(), yuv);
+        HmsScanFrameOptions.Creator opt = new HmsScanFrameOptions.Creator();
 
         Object scanTypes = options.get("scanTypes");
         Object photoMode = options.get("photoMode");
         Object parseResult = options.get("parseResult");
-        if (scanTypes != null){
-            int[] args = ScanKitUtilities.getArrayFromFlags((Integer) scanTypes);
-            int[] var2 = Arrays.copyOfRange(args, 1, args.length);
-            creator.setHmsScanTypes(args[0],var2);
-        }
-        if (photoMode != null){
-            creator.setPhotoMode((Boolean) photoMode);
-        }
-        if (parseResult != null){
-            creator.setParseResult((Boolean) parseResult);
-        }
 
-        HmsScan[] hmsScans = ScanUtil.decode(activity, frame, creator.create()).getHmsScans();
-        return getResult(hmsScans);
+        int[] args = ScanKitUtilities.getArrayFromFlags((Integer) scanTypes);
+        int[] var2 = Arrays.copyOfRange(args, 1, args.length);
+        HmsScanAnalyzer barcodeDetector = new HmsScanAnalyzer(new HmsScanAnalyzerOptions.Creator().setHmsScanTypes(args[0], var2).create());
+        MLFrame image = MLFrame.fromBitmap(bitmap);
+        SparseArray<HmsScan> result = barcodeDetector.analyseFrame(image);
+
+        HmsScan[] info = new HmsScan[result.size()];
+        for (int index = 0; index < result.size(); index++) {
+            info[index] = result.valueAt(index);
+        }
+        return getResult(info);
+    }
+
+    private static Bitmap convertToBitmap(int width, int height, byte[] data) {
+        YuvImage yuv = new YuvImage(data, ImageFormat.NV21, width, height, null);
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        yuv.compressToJpeg(new Rect(0, 0, width, height), 100, stream);
+        return BitmapFactory.decodeByteArray(stream.toByteArray(), 0, stream.toByteArray().length);
     }
 
     static boolean checkHmsScan(HmsScan[] hmsScans){
@@ -102,7 +113,7 @@ public class ScanKitBitmapMode {
             creator.setParseResult((Boolean) parseResult);
         }
         HmsScanFrame frame = new HmsScanFrame(bitmap);
-        HmsScan[] hmsScans = ScanUtil.decode(c,frame,creator.create()).getHmsScans();
+        HmsScan[] hmsScans = ScanUtil.decode(c,frame,creator.setMultiMode(true).create()).getHmsScans();
         return getResult(hmsScans);
     }
 
